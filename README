@@ -1,0 +1,9 @@
+This is a small proof-of-concept of the new OCR capabilities in the Google App Engine SDK 1.6.1, via the Conversion services: http://code.google.com/appengine/docs/java/conversion/overview.html
+
+The code is a small Scalatra application that receives a file uploaded from the client and using the Conversion service,
+ does some OCR on the input.
+
+Please note that it does not work yet.
+
+In order to build and deploy, modify src/main/webapp/WEB-INF/appengine-web.xml and replace "oscar-ocr" with your
+own GAE application id. Then, from SBT run "appengine-deploy" and provide your username and password when requested.

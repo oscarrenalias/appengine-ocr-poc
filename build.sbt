@@ -1,3 +1,5 @@
+import sbtappengine.Plugin.{AppengineKeys => gae}
+
 name := "appengine-ocr-poc"
 
 version := "1.0"

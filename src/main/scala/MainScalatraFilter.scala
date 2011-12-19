@@ -17,7 +17,11 @@ class MainScalatraFilter extends ScalatraFilter {
   get("/") {
     <html>
       <body>
-        <h1>Upload</h1>
+        <h1>Google App Engine OCR PoC</h1>
+        <p>
+          The following files are currently supported: JPEG, PNG and PDF. The target format for the conversion
+          is always plain text, and will appear in an editable text area.
+        </p>
         <div id="upload-form">
           <form class="form" method="POST" action="/upload" enctype="multipart/form-data">
             <p><input type="file" name="fileToScan" value="" /></p>
@@ -38,11 +42,17 @@ class MainScalatraFilter extends ScalatraFilter {
     		}
     }
 
-    val fileType = Map("png" -> "image/png", "jpg" -> "image/jpg", "jpeg" -> "image/jpeg") // TODO: what happens if the extension is none of these?
+    val fileType = Map(
+      "pdf" -> "application/pdf",
+      "png" -> "image/png",
+      "jpg" -> "image/jpeg",
+      "jpeg" -> "image/jpeg",
+      "txt" -> "text/plain"
+    ) // TODO: this will dump if the given file does not have a valid extension
 
     /**
      * Scalatra's file upload capabilities depend on Commons' FileUpload, which is not fully supported
-     * in GAE, so we need to find our way around that...
+     * in GAE so we need to find our way around it. More information: http://code.google.com/appengine/kb/java.html#fileforms
      */
     case class FileUpload(name:String, size:Int, data:Array[Byte])
 
@@ -51,10 +61,12 @@ class MainScalatraFilter extends ScalatraFilter {
       val iterator = upload.getItemIterator(req);
       val results = new HashMap[String, FileUpload]()
 
-      while(iterator.hasNext) { // TODO: we can probably Scala-ify this bit...
+      // FileItemIterator does not implement java.util.Iterator so we cannot convert to a Scala iterator... ain't that nice
+      while(iterator.hasNext) {
         val item = iterator.next();
     
         if (!item.isFormField()) {
+          // we use Commons' IOUtils to make our life easier to convert the input stream to byte[]
           val contents = IOUtils.toByteArray(item.openStream())
           results += (item.getFieldName -> FileUpload(item.getName, contents.size, contents))
         }
@@ -64,33 +76,41 @@ class MainScalatraFilter extends ScalatraFilter {
     }
 
     handleUpload(this.request).get("fileToScan").map({fileData =>
-      // note: we use Commons' IOUtils to make our life easier to convert the input stream to byte[]
       val asset = new Asset(fileType(fileExt(fileData.name)), fileData.data, fileData.name)
       val document = new Document(asset)
-      val conversion = new Conversion(document, "text/html")
+      val conversion = new Conversion(document, "text/plain")
       val result = ConversionServiceFactory.getConversionService().convert(conversion)
 
       if(result.success()) {
-            <html>
-              <body>
-                <p>Conversion results:</p>
-                <hr/>
-                <p>
-                  {result.getOutputDoc.getAssets.mkString("")}
-                </p>
-              </body>
-            </html>
+        <html>
+          <body>
+            <p>Conversion results for file <b>{fileData.name}</b>, of type <b>{fileType(fileExt(fileData.name))}</b>:</p>
+            <hr/>
+            <textarea rows="20" cols="80">
+              { // asset.getData returns Array[Byte], so we need to turn that back into a String
+                result.getOutputDoc.getAssets.map({asset=>new String(asset.getData)}).mkString("")
+              }
+            </textarea>
+            <hr/>
+            <p>
+              <a href="/">Try again</a>
+            </p>
+          </body>
+        </html>
       }
       else {
-            <html>
-              <body>
-                <p>There was an error performing the conversion:</p>
-                <hr/>
-                <p>
-                  {result.getErrorCode}
-                </p>
-              </body>
-            </html>
+        <html>
+          <body>
+            <p>There was an error performing the conversion:</p>
+            <hr/>
+            <p>
+              {result.getErrorCode}
+            </p>
+            <p>
+              <a href="/">Try again</a>
+            </p>
+          </body>
+        </html>
       }
     }).getOrElse("No file was uploaded")
   }
